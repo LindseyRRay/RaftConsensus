@@ -2,6 +2,7 @@ from enum import Enum
 from random import randint
 import threading
 import time
+from queue import Queue 
 
 from raft import SERVER_IDS
 
@@ -21,15 +22,17 @@ class Server(threading.Thread):
         threading.Thread.__init__(self)
         self.ID = server_id
         self.state = State.candidate
+        self.set_daemon = True
 
         self.current_term = 0
         self.voted_for = None
         self.log = list()
-        self.queue_messages = list()
+        self.queue_messages = QUEUE()
         self.last_update = time.time()
         self.election_start = None
         self.election_time = self.generate_election_time()
         self.peers = [p for p in SERVER_IDS if p != self.ID]
+        self.total_votes = 0
 
 
         #volatile attributes
@@ -58,7 +61,7 @@ class Server(threading.Thread):
             self.call_election()
         #if follower check to make
         elif self.state = State.Leader:
-            #send heartbeat message
+            self.send_heartbeat()
 
 
     def call_election(self):
@@ -71,6 +74,8 @@ class Server(threading.Thread):
         self.state = State.candidate
         self.voted_for = None
         self.current_term += 1
+        #reset message queue
+        self.queue_messages = QUEUE()
         self.request_votes()
         #self.state_manager.next_step()
 
@@ -113,8 +118,19 @@ class Server(threading.Thread):
             return
 
     def process_vote_response(self, msg): 
-        #Calculate vote responses and add to tally to 
+        #Calculate vote responses and add to tally to
+        #calculate majority
+        if self.state == state.candidate and msg.term == self.current_term:
+            self.total_votes += 1
 
+        if self.total_votes >= len(self.peers)/2:
+            self.state = state.leader
+            self.become_leader()
+
+    def become_leader(self):
+        self.send_heartbeat()
+        self.queue_messages = QUEUE()
+        self.voted_for = None
 
     def send_heartbeat(self):
         print("Sending heartbeat %s" %self.ID)

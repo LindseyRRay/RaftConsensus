@@ -4,44 +4,91 @@
 #create global message queue
 #sending message adds to the queue
 #after every while loop, the class dispatches messages to server queue
-from server import Server, State
-from message import message
+#from server import Server, State
+#from message import message
 from queue import Queue
 from random import randint
 from time import time
+import threading
+import pudb
+
+from server import Server, State
+
+#add methods to get global queue, 
 
 class Raft:
 
 	def __init__(self, number_servers=3):
 		self.number_servers = number_servers
-		self.server_nums =self.get_server_ids(number_servers)
-		self.server_list = [Server(r) for r in server_nums]
-		self.message_queue = Queue()
+		self.rlock = threading.RLock()
+		self.server_nums = self.get_server_ids(number_servers)
+		#self.message_queue = Queue()
+		self.message_queue = list()
+		self.server_list = [Server(r, self) for r in self.server_nums]
 		self.Run = True
 
 	def get_server_ids(self, number_servers):
-		dups = False
-		while dups == False:
-			servers_nums = [randint(0,100) for r in range(number_servers)]
+		dups = True
+		server_nums = []
+		while dups == True:
+			dups = False
+			[server_nums.append(randint(0,100000000000000)) for r in range(number_servers)]
 			if len(server_nums) != len(set(server_nums)):
 				dups = True
-		return server_nums 
+		
+		[str(num) for num in server_nums]
+		print(server_nums)
+		return server_nums
+
+	def distribute_messages(self, msg, server):
+		for recip in msg.recipients:
+			if server.ID == recip:
+				with self.rlock:
+					#server.queue_messages.put(msg)
+					server.queue_messages.append(msg)
+
+#	def generator_queue(self):
+#		print(self.message_queue.qsize())
+#		yield self.message_queue.get() 
 
 
+	def generator_queue(self):
+		print(len(self.message_queue))
+		yield self.message_queue.pop()
 
 	def main_loop(self):
-		
+		#update the timers for all the servers
+		count = 0
+		while self.Run and count < 5:
+			[s.update_timers() for s in self.server_list]
+			#distribute the messages for each server and message in the list
+			#need to think of a better way to distribute messages
+			for msg in self.generator_queue():
+				print("Main distributing messages")
+				print("Message Type %s"%msg.type)
+				print("Message from %s"%msg.sender)
+				print("Message t0 %s" %msg.recipients)
+				[self.distribute_messages(msg, serv) for serv in self.server_list]
+			print("Main Checking Messages")
+			[serv.check_messages() for serv in self.server_list]
+			count += 1
+
+			#if self.message_queue.qsize() == 0:
+			#	pudb.set_trace()
 
 
-
+			
 
 	def end_program(self):
-		self.run = False
+		self.Run = False
 
 
 
+if __name__ == '__main__':
 
-def main():
+	new_test = Raft(3)
+	new_test.main_loop()
+
 
 
 #Create global queue for messages

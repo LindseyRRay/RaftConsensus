@@ -11,6 +11,7 @@ from random import randint
 from time import time
 import threading
 import pudb
+import pdb
 
 from server import Server, State
 
@@ -42,33 +43,47 @@ class Raft:
 
 	def distribute_messages(self, msg, server):
 		for recip in msg.recipients:
-			if server.ID == recip:
+			print("Debugging dist")
+			print(recip)
+			print(type(recip))
+			print(server.ID)
+			print(type(server.ID))
+			if str(server.ID) == str(recip):
 				with self.rlock:
 					#server.queue_messages.put(msg)
+					print("adding to queue")
 					server.queue_messages.append(msg)
+					print(server.queue_messages)
 
 #	def generator_queue(self):
 #		print(self.message_queue.qsize())
 #		yield self.message_queue.get() 
 
 
-	def generator_queue(self):
-		print(len(self.message_queue))
-		yield self.message_queue.pop()
+	#def generator_queue(self):
+	#	print(len(self.message_queue))
+	#	yield self.message_queue.pop(0)
 
 	def main_loop(self):
 		#update the timers for all the servers
 		count = 0
-		while self.Run and count < 5:
+		while self.Run and count < 10:
 			[s.update_timers() for s in self.server_list]
 			#distribute the messages for each server and message in the list
 			#need to think of a better way to distribute messages
-			for msg in self.generator_queue():
+	
+			while len(self.message_queue) > 0:
+				print(len(self.message_queue))
+				msg = self.message_queue.pop(0)
+			
 				print("Main distributing messages")
 				print("Message Type %s"%msg.type)
 				print("Message from %s"%msg.sender)
 				print("Message t0 %s" %msg.recipients)
 				[self.distribute_messages(msg, serv) for serv in self.server_list]
+				#pdb.set_trace()
+		
+				
 			print("Main Checking Messages")
 			[serv.check_messages() for serv in self.server_list]
 			count += 1

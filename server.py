@@ -23,7 +23,7 @@ class Server(threading.Thread):
     def __init__(self, server_id, Raft_instance):
         #persistent attributes
         threading.Thread.__init__(self)
-        self.ID = server_id
+        self.ID = str(server_id)
         self.state = State.candidate
         self.set_daemon = True
         self.rlock = Raft_instance.rlock
@@ -40,7 +40,7 @@ class Server(threading.Thread):
         self.election_time = self.generate_election_time()
         self.peers = [p for p in self.SERVER_IDS if p != self.ID]
         self.total_votes = 0
-
+        print(self.peers)
 
         #volatile attributes
         self.commit_index = None
@@ -127,6 +127,10 @@ class Server(threading.Thread):
  
 
     def process_vote_request(self, msg):
+'''
+      LOGIC ERROR HERE -> PEOPLE SHOULD NOT CONVERT TO FOLLOWER ! 
+      SHOULD CHECK if LENGTH OF VOTED FOR LIST '''
+
         print("processing vote request %s" %self.ID)
         if self.state == State.candidate and self.voted_for == None and msg.term >= self.current_term:
             self.voted_for = str(msg.sender)
@@ -140,8 +144,11 @@ class Server(threading.Thread):
         #Calculate vote responses and add to tally to
         #calculate majority
         print("processing vote response")
+        pdb.set_trace()
+
         if self.state == State.candidate and msg.term == self.current_term :
             self.total_votes += 1
+            print("total votes %s" %self.total_votes)
 
         if self.total_votes > len(self.peers)/2:
             self.state = State.leader
@@ -171,13 +178,17 @@ class Server(threading.Thread):
             #adding message to Raft instance global queue
             #self.Raft_instance.message_queue.put(msg)
             self.Raft_instance.message_queue.append(msg)
+            print("Adding to GLOBAL queue")
     #organizing function for reading messages
 
     def check_messages(self):
-        print("Checking Messages %s" %self.ID)
+        print("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
         #if message is queue 
+        if len(self.queue_messages) == 0 and self.state == State.leader:
+            self.send_heartbeat()
         while len(self.queue_messages) > 0 :
             self.process_message(self.queue_messages.pop())
+
        # while not self.queue_messages.empty():
          #   self.process_message(self.queue_messages.get())
             

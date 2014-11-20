@@ -25,7 +25,7 @@ class Message:
 	def parse_recipients(self, recipients):
 		#if recipients are all servers
 		if recipients[0] == 'a':
-			list_recipients = [server for server in self.SERVER_IDS if server != self.sender]
+			list_recipients = [str(server) for server in self.SERVER_IDS if server != self.sender]
 			return list_recipients
 		else:
 			#str_recipients = [str(recip) for recip in recipients]

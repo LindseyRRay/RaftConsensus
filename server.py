@@ -5,6 +5,13 @@ import time
 from queue import Queue 
 import pudb
 import pdb
+import logging
+
+
+#import logging and debugging 
+logging.basicConfig(level=logging.DEBUG,
+                    format='[%(levelname)s] (%(threadName)-10s) %(message)s',
+                    )
 
 
 from message import Message, Msg_Type
@@ -25,7 +32,7 @@ class Server(threading.Thread):
         threading.Thread.__init__(self)
         self.ID = str(server_id)
         self.state = State.candidate
-        self.set_daemon = True
+        self.daemon = True
         self.rlock = Raft_instance.rlock
         self.SERVER_IDS = Raft_instance.server_nums
         self.Raft_instance = Raft_instance
@@ -48,9 +55,6 @@ class Server(threading.Thread):
         #Leader attributes
         self.next_index = 0 
         self.match_index = 0
-
-        #start thread
-        self.start()
 
 #generate election timeout interval
     def generate_election_time(self):
@@ -86,7 +90,7 @@ class Server(threading.Thread):
 
 
     def call_election(self):
-        #print("Calling Election %s" %self.ID) 
+        logging.debug("Calling Election %s" %self.ID) 
         #create random timer, when it times out, send out Request for Vote Messages
         #possibly clear message queue
         #clear election queue
@@ -103,18 +107,19 @@ class Server(threading.Thread):
         #self.state_manager.next_step()
 
     def request_votes(self):
-        #print("Asking for votes %s" %self.ID)
+        logging.debug("Asking for votes %s" %self.ID)
         #send message to all servers asking for votes
         self.send_message(recip = 'all_servers', msg_type = Msg_Type.RFV)
 
 #sending vote function
     def send_vote(self):  
-        print("sending vote: %s for: %s" %(str(self.ID), str(self.voted_for))) 
-        self.send_message(recip = [self.voted_for], msg_type = Msg_Type.RFV_YES) 
+        logging.debug("sending vote: %s for: %s" %(str(self.ID), str(self.voted_for))) 
+        with self.rlock:
+            self.send_message(recip = [self.voted_for], msg_type = Msg_Type.RFV_YES) 
 
 #process a heartbeat message
     def process_heartbeat(self, msg):
-        print("processing heartbeat %s" %self.ID)
+        logging.debug("processing heartbeat %s" %self.ID)
         #if get heartbeat, update time of last update
         if self.state == State.follower and msg.term >= self.current_term:
             self.last_update = time.time()
@@ -149,10 +154,10 @@ class Server(threading.Thread):
     def process_vote_response(self, msg): 
         #Calculate vote responses and add to tally to
         #calculate majority
-        print("processing vote response")
+        logging.debug("processing vote response %s" %self.ID)
         if self.state == State.candidate and msg.term == self.current_term :
             self.total_votes += 1
-            print("total votes %s" %self.total_votes)
+            logging.debug("total votes %s" %self.total_votes)
 #become a leader if you receive a majority of your peers in votes
         if self.total_votes > len(self.peers)/2:
             self.state = State.leader
@@ -161,7 +166,7 @@ class Server(threading.Thread):
 #change state to leader
 #send out heartbeat, clear your queue list
     def become_leader(self):
-        print("becoming leader %s" %self.ID)
+        logging.debug("becoming leader %s" %self.ID)
         self.send_heartbeat()
         #self.queue_messages = Queue()
         self.queue_messages = list()
@@ -169,13 +174,13 @@ class Server(threading.Thread):
 
 
     def send_heartbeat(self):
-        print("Sending heartbeat %s" %self.ID)
+        logging.debug("Sending heartbeat %s" %self.ID)
         self.send_message(recip = 'all_servers', msg_type=Msg_Type.HEARTBEAT)
 
 
     def send_message(self, recip, msg_type):
         #Create a new message and add arguments
-        print("Sending message %s to %s" %(str(self.ID), str(recip)))
+        logging.debug("Sending message %s to %s" %(str(self.ID), str(recip)))
         #Add message to universal queue
         #pass server IDS to the current message
         msg = Message(sender = self.ID, recipients = recip, msg_type = msg_type, term = self.current_term, server_ids = self.SERVER_IDS)
@@ -185,12 +190,12 @@ class Server(threading.Thread):
             #adding message to Raft instance global queue
             #self.Raft_instance.message_queue.put(msg)
             self.Raft_instance.message_queue.append(msg)
-            print("Adding to GLOBAL queue")
+            logging.debug("Adding to GLOBAL queue from %s"%self.ID)
     #organizing function for reading messages
 
     def check_messages(self):
-        print("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
-        print(self.state)
+        logging.debug("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
+        logging.debug(self.state)
         if len(self.queue_messages) == 0 and self.state == State.leader:
             self.send_heartbeat()
         while len(self.queue_messages) > 0 :
@@ -203,11 +208,12 @@ class Server(threading.Thread):
 
     def process_message(self, msg):
         #remove old messages from queue
-        print("Processing messages")
+        logging.debug("Processing messages %s" %self.ID)    
         if msg.term < self.current_term:
             print("No messages")
             return
         if msg.type == Msg_Type.HEARTBEAT:
+
             self.process_heartbeat(msg)
 
         elif msg.type == Msg_Type.RFV:
@@ -220,8 +226,11 @@ class Server(threading.Thread):
             print("Bad")
 
     def run(self):
-        while self.Raft_instance.Run:
+        #while self.Raft_instance.Run:
+        while True:
+            logging.debug("thread updating timers")
             self.update_timers()
+            logging.debug("thread checking messages")
             self.check_messages()
 
 

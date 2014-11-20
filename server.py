@@ -119,24 +119,24 @@ class Server(threading.Thread):
             #update term of the member if less than existing term
             self.current_term = msg.term
         #if current state is candidate, and term >= current, update to follower
-        if self.state in [State.candidate, State.leader] and msg.term >= self.current_term:
+        if self.state in [State.candidate, State.leader] and msg.term > self.current_term:
             self.last_update = time.time()
             self.current_term = msg.term
             self.state = State.follower
             self.voted_for = None
+#add check to only send heartbeat if no one in the global queue
+        elif self.state == State.leader and msg.term == self.current_term:
+            if len(self.Raft_instance.message_queue) ==0 or str(self.Raft_instance.message_queue[0].sender) == str(self.server_id):
+                pass
+            else:
+                self.send_heartbeat()
  
 
     def process_vote_request(self, msg):
-'''
-      LOGIC ERROR HERE -> PEOPLE SHOULD NOT CONVERT TO FOLLOWER ! 
-      SHOULD CHECK if LENGTH OF VOTED FOR LIST '''
-
         print("processing vote request %s" %self.ID)
         if self.state == State.candidate and self.voted_for == None and msg.term >= self.current_term:
             self.voted_for = str(msg.sender)
             self.current_term = msg.term
-            #DO people inmediatly convert to follower
-            self.state = State.follower
             self.send_vote()
 
 
@@ -144,8 +144,6 @@ class Server(threading.Thread):
         #Calculate vote responses and add to tally to
         #calculate majority
         print("processing vote response")
-        pdb.set_trace()
-
         if self.state == State.candidate and msg.term == self.current_term :
             self.total_votes += 1
             print("total votes %s" %self.total_votes)
@@ -162,9 +160,11 @@ class Server(threading.Thread):
         self.queue_messages = list()
         self.voted_for = None
 
+
     def send_heartbeat(self):
         print("Sending heartbeat %s" %self.ID)
         self.send_message(recip = 'all_servers', msg_type=Msg_Type.HEARTBEAT)
+
 
     def send_message(self, recip, msg_type):
         #Create a new message and add arguments
@@ -183,7 +183,7 @@ class Server(threading.Thread):
 
     def check_messages(self):
         print("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
-        #if message is queue 
+        print(self.state)
         if len(self.queue_messages) == 0 and self.state == State.leader:
             self.send_heartbeat()
         while len(self.queue_messages) > 0 :

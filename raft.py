@@ -43,11 +43,6 @@ class Raft:
 
 	def distribute_messages(self, msg, server):
 		for recip in msg.recipients:
-			print("Debugging dist")
-			print(recip)
-			print(type(recip))
-			print(server.ID)
-			print(type(server.ID))
 			if str(server.ID) == str(recip):
 				with self.rlock:
 					#server.queue_messages.put(msg)
@@ -67,7 +62,7 @@ class Raft:
 	def main_loop(self):
 		#update the timers for all the servers
 		count = 0
-		while self.Run and count < 10:
+		while self.Run and count < 20:
 			[s.update_timers() for s in self.server_list]
 			#distribute the messages for each server and message in the list
 			#need to think of a better way to distribute messages

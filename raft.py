@@ -62,7 +62,8 @@ class Raft:
 	def main_loop(self):
 		#update the timers for all the servers
 		count = 0
-		while self.Run and count < 20:
+		while self.Run and count < 5:
+			print("COUNT %s" %count)
 			[s.update_timers() for s in self.server_list]
 			#distribute the messages for each server and message in the list
 			#need to think of a better way to distribute messages
@@ -83,11 +84,12 @@ class Raft:
 			[serv.check_messages() for serv in self.server_list]
 			count += 1
 
+			if count == 5:
+				self.message_queue = list()
+
 			#if self.message_queue.qsize() == 0:
 			#	pudb.set_trace()
-
-
-			
+		
 
 	def end_program(self):
 		self.Run = False

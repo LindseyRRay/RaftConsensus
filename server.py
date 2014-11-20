@@ -40,7 +40,6 @@ class Server(threading.Thread):
         self.election_time = self.generate_election_time()
         self.peers = [p for p in self.SERVER_IDS if p != self.ID]
         self.total_votes = 0
-        print(self.peers)
 
         #volatile attributes
         self.commit_index = None
@@ -50,17 +49,21 @@ class Server(threading.Thread):
         self.next_index = 0 
         self.match_index = 0
 
+        #start thread
+        self.start()
+
+#generate election timeout interval
     def generate_election_time(self):
-        return randint(150,300)/1000
+        #return randint(150,300)/1000
+        return randint(15,300)/10
 
     def update_timers(self):
         #need to fix elapsed METHOD, throwing an error
         now = time.time()
-        print("NOW %s" %now)
         if self.state == State.candidate:
             try:
                 elapsed = now - self.election_start
-                        #check for a dead leader, call election if leader dead
+                #check for a dead leader, call election if leader dead
                 if now - self.last_update > HEARTBEAT_TIMEOUT and self.state == State.follower:
                     self.call_election()
                 #Election timer still not elapsed, check for messages- no action
@@ -69,6 +72,7 @@ class Server(threading.Thread):
                     #check for messages
                 #Election timer ran out, not converted to another state, request votes
                 elif self.state == State.candidate and elapsed > self.election_time:
+                    time.sleep(5)
                     self.call_election()
                 #if follower check to make
                 elif self.state == State.Leader:
@@ -81,11 +85,8 @@ class Server(threading.Thread):
             self.send_heartbeat()
 
 
-
-
-
     def call_election(self):
-        print("Calling Election %s" %self.ID) 
+        #print("Calling Election %s" %self.ID) 
         #create random timer, when it times out, send out Request for Vote Messages
         #possibly clear message queue
         #clear election queue
@@ -102,15 +103,16 @@ class Server(threading.Thread):
         #self.state_manager.next_step()
 
     def request_votes(self):
-        print("Asking for votes %s" %self.ID)
+        #print("Asking for votes %s" %self.ID)
+        #send message to all servers asking for votes
         self.send_message(recip = 'all_servers', msg_type = Msg_Type.RFV)
 
-
+#sending vote function
     def send_vote(self):  
         print("sending vote: %s for: %s" %(str(self.ID), str(self.voted_for))) 
         self.send_message(recip = [self.voted_for], msg_type = Msg_Type.RFV_YES) 
 
-
+#process a heartbeat message
     def process_heartbeat(self, msg):
         print("processing heartbeat %s" %self.ID)
         #if get heartbeat, update time of last update
@@ -119,21 +121,25 @@ class Server(threading.Thread):
             #update term of the member if less than existing term
             self.current_term = msg.term
         #if current state is candidate, and term >= current, update to follower
+        #this means the server is behind the other servers and needs to fast forward
         if self.state in [State.candidate, State.leader] and msg.term > self.current_term:
             self.last_update = time.time()
             self.current_term = msg.term
             self.state = State.follower
             self.voted_for = None
-#add check to only send heartbeat if no one in the global queue
-        elif self.state == State.leader and msg.term == self.current_term:
-            if len(self.Raft_instance.message_queue) ==0 or str(self.Raft_instance.message_queue[0].sender) == str(self.server_id):
-                pass
-            else:
-                self.send_heartbeat()
+        else :
+            return 
+        #add check to only send heartbeat if no one in the global queue
+        #if you receive a heartbeat from yourself, then send out another one to global queue
+        #elif self.state == State.leader and msg.term == self.current_term:
+            #if len(self.Raft_instance.message_queue) ==0 or str(self.Raft_instance.message_queue[0].sender) == str(self.server_id):
+                #pass
+           # else:
+              #  self.send_heartbeat()
  
 
     def process_vote_request(self, msg):
-        print("processing vote request %s" %self.ID)
+        #print("processing vote request %s" %self.ID)
         if self.state == State.candidate and self.voted_for == None and msg.term >= self.current_term:
             self.voted_for = str(msg.sender)
             self.current_term = msg.term
@@ -147,12 +153,13 @@ class Server(threading.Thread):
         if self.state == State.candidate and msg.term == self.current_term :
             self.total_votes += 1
             print("total votes %s" %self.total_votes)
-
+#become a leader if you receive a majority of your peers in votes
         if self.total_votes > len(self.peers)/2:
             self.state = State.leader
             self.current_term += 1
             self.become_leader()
-
+#change state to leader
+#send out heartbeat, clear your queue list
     def become_leader(self):
         print("becoming leader %s" %self.ID)
         self.send_heartbeat()
@@ -211,6 +218,11 @@ class Server(threading.Thread):
 
         else:
             print("Bad")
+
+    def run(self):
+        while self.Raft_instance.Run:
+            self.update_timers()
+            self.check_messages()
 
 
 

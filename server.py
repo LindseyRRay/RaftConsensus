@@ -90,7 +90,7 @@ class Server(threading.Thread):
 
 
     def call_election(self):
-        logging.debug("Calling Election %s" %self.ID) 
+        #logging.debug("Calling Election %s" %self.ID) 
         #create random timer, when it times out, send out Request for Vote Messages
         #possibly clear message queue
         #clear election queue
@@ -107,19 +107,19 @@ class Server(threading.Thread):
         #self.state_manager.next_step()
 
     def request_votes(self):
-        logging.debug("Asking for votes %s" %self.ID)
+        #logging.debug("Asking for votes %s" %self.ID)
         #send message to all servers asking for votes
         self.send_message(recip = 'all_servers', msg_type = Msg_Type.RFV)
 
 #sending vote function
     def send_vote(self):  
-        logging.debug("sending vote: %s for: %s" %(str(self.ID), str(self.voted_for))) 
+        #logging.debug("sending vote: %s for: %s" %(str(self.ID), str(self.voted_for))) 
         with self.rlock:
             self.send_message(recip = [self.voted_for], msg_type = Msg_Type.RFV_YES) 
 
 #process a heartbeat message
     def process_heartbeat(self, msg):
-        logging.debug("processing heartbeat %s" %self.ID)
+        #logging.debug("processing heartbeat %s" %self.ID)
         #if get heartbeat, update time of last update
         if self.state == State.follower and msg.term >= self.current_term:
             self.last_update = time.time()
@@ -154,7 +154,7 @@ class Server(threading.Thread):
     def process_vote_response(self, msg): 
         #Calculate vote responses and add to tally to
         #calculate majority
-        logging.debug("processing vote response %s" %self.ID)
+       # logging.debug("processing vote response %s" %self.ID)
         if self.state == State.candidate and msg.term == self.current_term :
             self.total_votes += 1
             logging.debug("total votes %s" %self.total_votes)
@@ -166,7 +166,7 @@ class Server(threading.Thread):
 #change state to leader
 #send out heartbeat, clear your queue list
     def become_leader(self):
-        logging.debug("becoming leader %s" %self.ID)
+        #logging.debug("becoming leader %s" %self.ID)
         self.send_heartbeat()
         #self.queue_messages = Queue()
         self.queue_messages = list()
@@ -174,13 +174,13 @@ class Server(threading.Thread):
 
 
     def send_heartbeat(self):
-        logging.debug("Sending heartbeat %s" %self.ID)
+        #logging.debug("Sending heartbeat %s" %self.ID)
         self.send_message(recip = 'all_servers', msg_type=Msg_Type.HEARTBEAT)
 
 
     def send_message(self, recip, msg_type):
         #Create a new message and add arguments
-        logging.debug("Sending message %s to %s" %(str(self.ID), str(recip)))
+        #logging.debug("Sending message %s to %s" %(str(self.ID), str(recip)))
         #Add message to universal queue
         #pass server IDS to the current message
         msg = Message(sender = self.ID, recipients = recip, msg_type = msg_type, term = self.current_term, server_ids = self.SERVER_IDS)
@@ -190,12 +190,12 @@ class Server(threading.Thread):
             #adding message to Raft instance global queue
             #self.Raft_instance.message_queue.put(msg)
             self.Raft_instance.message_queue.append(msg)
-            logging.debug("Adding to GLOBAL queue from %s"%self.ID)
+            #logging.debug("Adding to GLOBAL queue from %s"%self.ID)
     #organizing function for reading messages
 
     def check_messages(self):
-        logging.debug("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
-        logging.debug(self.state)
+        #logging.debug("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
+        logging.debug("State %s" %self.state)
         if len(self.queue_messages) == 0 and self.state == State.leader:
             self.send_heartbeat()
         while len(self.queue_messages) > 0 :
@@ -208,9 +208,9 @@ class Server(threading.Thread):
 
     def process_message(self, msg):
         #remove old messages from queue
-        logging.debug("Processing messages %s" %self.ID)    
+        #logging.debug("Processing messages %s" %self.ID)    
         if msg.term < self.current_term:
-            print("No messages")
+           # print("No messages")
             return
         if msg.type == Msg_Type.HEARTBEAT:
 
@@ -228,9 +228,9 @@ class Server(threading.Thread):
     def run(self):
         #while self.Raft_instance.Run:
         while True:
-            logging.debug("thread updating timers")
+            #logging.debug("thread updating timers")
             self.update_timers()
-            logging.debug("thread checking messages")
+            #logging.debug("thread checking messages")
             self.check_messages()
 
 

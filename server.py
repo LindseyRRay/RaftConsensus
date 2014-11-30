@@ -14,10 +14,16 @@ logging.basicConfig(level=logging.DEBUG,
                     )
 
 
-from message import Message, Msg_Type
+from message import Message, AppendEntries, AppendEntriesResponse, RequestVote, RequestVoteResponse
+from log import Log, LogEntry
 
 HEARTBEAT_TIMEOUT = 1
 
+class Msg_Type(Enum):
+    AppendEntries = 1
+    AppendEntriesResponse = 2
+    RequestVote = 3
+    RequestVoteResponse = 4
 
 
 class State(Enum):
@@ -39,7 +45,7 @@ class Server(threading.Thread):
 
         self.current_term = 0
         self.voted_for = None
-        self.log = list()
+
         #self.queue_messages = Queue()
         self.queue_messages= list()
         self.last_update = time.time()
@@ -49,12 +55,16 @@ class Server(threading.Thread):
         self.total_votes = 0
 
         #volatile attributes
-        self.commit_index = None
+        self.commit_index = 0
         self.last_applied = 0
+        self.currentLeader = None
+
+        #log attributes
+        self.log = Log()
 
         #Leader attributes
-        self.next_index = 0 
-        self.match_index = 0
+        self.next_index = dict() 
+        self.match_index = dict()
 
 #generate election timeout interval
     def generate_election_time(self):
@@ -106,28 +116,44 @@ class Server(threading.Thread):
         self.request_votes()
         #self.state_manager.next_step()
 
-    def request_votes(self):
+    def send_requestvote(self):
         #logging.debug("Asking for votes %s" %self.ID)
         #send message to all servers asking for votes
-        self.send_message(recip = 'all_servers', msg_type = Msg_Type.RFV)
+        self.send_message(recip = 'all_servers', msg_type = Msg_Type.RequestVote)
 
 #sending vote function
     def send_vote(self):  
         #logging.debug("sending vote: %s for: %s" %(str(self.ID), str(self.voted_for))) 
         with self.rlock:
-            self.send_message(recip = [self.voted_for], msg_type = Msg_Type.RFV_YES) 
-
+            self.send_message(recip = [self.voted_for], msg_type = Msg_Type.RequestVoteResponse) 
+    
+    def send_heartbeat_response(self, success):
+        self.send_message(recip =[self.currentLeader], msg_type = Msg_Type.AppendEntriesResponse, data = success)
 #process a heartbeat message
     def process_heartbeat(self, msg):
         #logging.debug("processing heartbeat %s" %self.ID)
         #if get heartbeat, update time of last update
-        if self.state == State.follower and msg.term >= self.current_term:
+        if self.state == State.follower:
+            if msg.term >= self.current_term:
             self.last_update = time.time()
             #update term of the member if less than existing term
             self.current_term = msg.term
+            elif msg.term < self.current_term:
+                self.send_heartbeat_response(data=False)
+            elif self.log[log.prevLogIndex].term != msg.prevLogTerm:
+                self.send_heartbeat_response(data=False)
+                #reply false if log doesn't contain an entry at prevLog Index whose term matches prevLogTerm
+        if self.state == State.follower and len(msg.entries) > 0:
+            self.compare_logs(msg)
+            self.append_entries(msg)
+#if leader commit > commit index, setc commit index = min(leaderCommit, index of last new entry)
+            if msg.leaderCommit > self.commit_index:
+                self.commit_index = min(msg.leaderCommit, log.prevLogIndex)
+
+ 
         #if current state is candidate, and term >= current, update to follower
         #this means the server is behind the other servers and needs to fast forward
-        if self.state in [State.candidate, State.leader] and msg.term > self.current_term:
+        elif self.state in [State.candidate, State.leader] and msg.term > self.current_term:
             self.last_update = time.time()
             self.current_term = msg.term
             self.state = State.follower
@@ -141,7 +167,32 @@ class Server(threading.Thread):
                 #pass
            # else:
               #  self.send_heartbeat()
- 
+    #append any new entries not in the log
+    def append_entries(self, msg):
+        for index, entry in msg.entries:
+            if index > len(self.log)-1:
+                self.log.append(entry)
+        #update prevLogIndex
+        self.log.prevLogIndex = len(self.log)-1
+
+    def compare_logs(self, msg):
+        #if an existing entry conflicts with a new one (same index but dif terms),
+        # delete existing entry and all that follow
+        for index, entry in msg.entries:
+            if len(self.log)-1 < index:
+                continue
+            elif entry.term != self.log[index].term:
+                self.log.remove(self.log[index])
+       
+    def process_heartbeat_response(self, msg):
+        if self.state == State.leader and msg.term ==self.current_term:
+            #if append entry successful, add that to the log
+            if msg.success:
+                #increment count of servers with entry
+                #if now a majority, then commit and increment commit index
+        else:
+            return
+
 
     def process_vote_request(self, msg):
         #print("processing vote request %s" %self.ID)
@@ -175,6 +226,7 @@ class Server(threading.Thread):
 
     def send_heartbeat(self):
         #logging.debug("Sending heartbeat %s" %self.ID)
+        #send heartbeat with new commit index, info associated from client
         self.send_message(recip = 'all_servers', msg_type=Msg_Type.HEARTBEAT)
 
 
@@ -183,7 +235,16 @@ class Server(threading.Thread):
         #logging.debug("Sending message %s to %s" %(str(self.ID), str(recip)))
         #Add message to universal queue
         #pass server IDS to the current message
-        msg = Message(sender = self.ID, recipients = recip, msg_type = msg_type, term = self.current_term, server_ids = self.SERVER_IDS)
+        if msg_type == Msg_Type.AppendEntries:
+            msg = AppendEntries(self, recipients = recip)
+        elif msg_type == Msg_Type.AppendEntriesResponse:
+            msg = AppendEntriesResponse(self, self.currentLeader)
+        elif msg_type == Msg_Type.RequestVote:
+            msg = RequestVote(self, recipients = recip)
+        elif msg_type == Msg_Type.RequestVoteResponse:
+            msg = RequestVoteResponse(self, recip, True)
+        else:
+            raise Exception("Unknown type of Message")
 
         #GLOBAL QUEUE ADD INFO
         with self.rlock:
@@ -192,6 +253,9 @@ class Server(threading.Thread):
             self.Raft_instance.message_queue.append(msg)
             #logging.debug("Adding to GLOBAL queue from %s"%self.ID)
     #organizing function for reading messages
+
+    def process_client_request(self, msg):
+        #if you are leader you need to correctly process client request
 
     def check_messages(self):
         #logging.debug("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
@@ -212,14 +276,14 @@ class Server(threading.Thread):
         if msg.term < self.current_term:
            # print("No messages")
             return
-        if msg.type == Msg_Type.HEARTBEAT:
-
+        if msg.type == Msg_Type.AppendEntries:
             self.process_heartbeat(msg)
+        elif msg.type == Msg_Type.AppendEntriesResponse:
+            self.process_heartbeat_response(msg)
 
-        elif msg.type == Msg_Type.RFV:
+        elif msg.type == Msg_Type.RequestVote:
             self.process_vote_request(msg)
-
-        elif msg.type == Msg_Type.RFV_YES:
+        elif msg.type == Msg_Type.RequestVoteResponse:
             self.process_vote_response(msg)
 
         else:
@@ -240,7 +304,7 @@ if __name__ == '__main_u_':
 
     GLOBAL_QUEUE = Queue()
     rlock = threading.RLock()
-    test_msg = Message('234', ['123', '234'], Msg_Type.HEARTBEAT, 1)
+    test_msg = Message('234', ['123', '234'], Msg_Type.AppendEntries, 1)
     test_server = Server('123', rlock)
     test_server.call_election()
     pdb.set_trace()

@@ -49,8 +49,8 @@ class Raft:
 	def distribute_message(self, msg, server_id):
 		with self.rlock:
 			#server.queue_messages.put(msg)
-			logging.debug("Message Type %s"%msg.type)
-			logging.debug("Message from %s"%msg.sender)
+			logging.debug("Message Type %s"%type(msg).__name__)
+			logging.debug("Message from %s"%msg.senderID)
 			logging.debug("Message t0 %s" %msg.recipients)
 
 			self.server_dict[server_id].queue_messages.append(msg)
@@ -89,16 +89,19 @@ class Raft:
 		
 		while self.Run and count < 100000:
 			with self.rlock:
+				if len(self.message_queue)>0:
+					print("count %s"%count)
+					print(len(self.message_queue))
 				for msg in self.message_queue:
 					for serv in msg.recipients:
 						self.distribute_message(msg, serv)
 				del self.message_queue[:]
 			with self.rlock:
 				count +=1
-				for server in self.server_list:
-					if server.state == State.leader:
-						print("Count %s"%count)
-						time.sleep(20)
+				# for server in self.server_list:
+				# 	if server.state == State.leader:
+				# 		print("Count %s"%count)
+						#pdb.set_trace()
 						#self.end_program()
 
 

@@ -18,7 +18,7 @@ class Log:
 	#needs last log index, entry and prev log index and entry attributes
 	def __init__(self):
 		self.log = list()
-		self.commitIndex = 0
+		self.CommitIndex = 0
 
 	@property
 	#index of last log entry
@@ -28,11 +28,7 @@ class Log:
 	@property 
 	#index of last log entry preceeding new ones
 	def prevLogIndex(self):
-		return len(self.log)
-
-	@property 
-	def CommitIndex(self):
-		return self.CommitIndex
+		return len(self.log)	
 
 	    
 	

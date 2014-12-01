@@ -19,16 +19,16 @@ class Log:
 	def __init__(self):
 		self.log = list()
 		self.CommitIndex = 0
+		self.prevLogIndex = 0
 
 	@property
 	#index of last log entry
 	def lastLogIndex(self):
 	    return len(self.log)
 
-	@property 
 	#index of last log entry preceeding new ones
-	def prevLogIndex(self):
-		return len(self.log)	
+	def incrementprevLogIndex(self):
+		self.prevLogIndex +=1	
 
 	    
 	

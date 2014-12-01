@@ -7,7 +7,7 @@ class Msg_Type(Enum):
     RequestVote = 3
     RequestVoteResponse = 4
     ClientRequest = 5
-    ClientResponse = 6
+    ClientRequestResponse = 6
     FindLeader = 7
     FindLeaderResponse = 8
 
@@ -95,6 +95,13 @@ class ClientRequest:
 		self.command = command
 		self.type = Msg_Type.ClientRequest
 
+class ClientRequestResponse:
+
+	def __init__(self, sender, data):
+		self.senderID = sender
+		self.commitindex = data
+		self.type = Msg_Type.ClientRequestResponse
+
 class FindLeader:
 
 	def __init__(self, recipient):
@@ -103,17 +110,12 @@ class FindLeader:
 
 class FindLeaderResponse:
 
-	def __init__(self, data, sender):
+	def __init__(self, data):
 		self.data = data
 		self.type = Msg_Type.FindLeaderResponse
 
 
-class ClientRequestResponse:
 
-	def __init__(self, sender, data):
-		self.senderID = sender
-		self.commitindex = data
-		self.type = Msg_Type.ClientRequestResponse
 			
 
 

@@ -21,6 +21,8 @@ logging.basicConfig(level=logging.DEBUG,
                     )
 
 from server import Server, State
+from client import Client
+from message import Msg_Type
 
 #add methods to get global queue, 
 
@@ -33,7 +35,9 @@ class Raft:
 		#self.message_queue = Queue()
 		self.message_queue = list()
 		self.server_dict = {num: Server(num, self) for num in self.server_nums}
+		self.client = Client(self)
 		self.Run = True
+
 
 	@property 
 	def server_list(self):
@@ -52,6 +56,8 @@ class Raft:
 			logging.debug("Message Type %s"%type(msg).__name__)
 			logging.debug("Message from %s"%msg.senderID)
 			logging.debug("Message t0 %s" %msg.recipients)
+			if msg.type ==  Msg_Type.FindLeader:
+				print("FINDING LEADER")
 
 			self.server_dict[server_id].queue_messages.append(msg)
 
@@ -86,8 +92,9 @@ class Raft:
 		count = 0
 		for serv in self.server_list:
 			serv.start()
+		self.client.start()
 		
-		while self.Run:
+		while self.Run and count < 1000000:
 			with self.rlock:
 				if len(self.message_queue)>0:
 					print("count %s"%count)

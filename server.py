@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.DEBUG,
                     )
 
 #Need to create client and tie match index and next index to each server
-from message import Message, AppendEntries, AppendEntriesResponse, RequestVote, RequestVoteResponse, Msg_Type
+from message import Message, AppendEntries, AppendEntriesResponse, RequestVote, RequestVoteResponse, FindLeader, FindLeaderResponse, ClientRequest, ClientRequestResponse, Msg_Type
 from log import Log, LogEntry
 
 HEARTBEAT_TIMEOUT = 1
@@ -102,7 +102,8 @@ class Server(threading.Thread):
         self.queue_messages = list()
         self.election_time = self.generate_election_time()
         self.election_start = time.time()
-     
+        
+        self.currentLeader = None
         self.state = State.candidate
         self.voted_for = None
         self.current_term += 1
@@ -133,6 +134,7 @@ class Server(threading.Thread):
                 self.last_update = time.time()
             #update term of the member if less than existing term
                 self.current_term = msg.term
+                self.currentLeader = msg.leaderID
             elif msg.term < self.current_term:
                 self.send_heartbeat_response(data=False)
             elif self.log.log[log.prevLogIndex].term != msg.prevLogTerm:
@@ -226,6 +228,7 @@ class Server(threading.Thread):
     def become_leader(self):
         #logging.debug("becoming leader %s" %self.ID)
         self.send_heartbeat()
+        self.currentLeader = self.ID
         #self.queue_messages = Queue()
         self.queue_messages = list()
         self.voted_for = None
@@ -237,10 +240,10 @@ class Server(threading.Thread):
         self.next_index = {p: self.log.lastLogIndex+1 for p in peers}
         self.match_index = {p: 0 for p in peers}
 
-    def send_heartbeat(self):
+    def send_heartbeat(self, data =[]):
         #logging.debug("Sending heartbeat %s" %self.ID)
         #send heartbeat with new commit index, info associated from client
-        self.send_message(recip = 'all_servers', msg_type=Msg_Type.AppendEntries, data =[])
+        self.send_message(recip = 'all_servers', msg_type=Msg_Type.AppendEntries, data = data)
 
 
     def send_message(self, recip, msg_type, data=[]):
@@ -256,6 +259,11 @@ class Server(threading.Thread):
             msg = RequestVote(self, recipients = recip)
         elif msg_type == Msg_Type.RequestVoteResponse:
             msg = RequestVoteResponse(self, recip, vote_granted = data)
+        elif msg_type == Msg_Type.FindLeaderResponse:
+            msg = FindLeaderResponse(data)
+        elif msg_type == Msg_Type.ClientRequestResponse:
+            msg = ClientRequestResponse(self.ID, data)
+
         else:
             raise Exception("Unknown type of Message")
 
@@ -268,8 +276,22 @@ class Server(threading.Thread):
     #organizing function for reading messages
 
     def process_client_request(self, msg):
-        pass
         #if you are leader you need to correctly process client request
+        #if you are the leader, add command to your log
+        if self.state == State.leader:
+            with self.rlock:
+                newEntry = LogEntry(self.current_term, msg.data)
+                self.log.log.append(newEntry)
+                self.log.increment_prevLogIndex()
+                self.send_heartbeat(newEntry)
+        else:
+            #client doesn't know who leader is anymore, tell client to initiate search
+            self.send_message("client", Msg_Type.ClientRequestResponse, False)
+      
+    
+    def process_find_leader(self, msg):
+        self.send_message("client", Msg_Type.FindLeaderResponse, self.currentLeader)
+      
 
     def check_messages(self):
         #logging.debug("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
@@ -287,16 +309,24 @@ class Server(threading.Thread):
     def process_message(self, msg):
         #remove old messages from queue
         #logging.debug("Processing messages %s" %self.ID)    
-        if msg.term < self.current_term:
-           # print("No messages")
-            return
-        if msg.type == Msg_Type.AppendEntries:
+        # if msg.term < self.current_term:
+        #    # print("No messages")
+        #     return
+        if msg.type == Msg_Type.FindLeader:
+            self.process_find_leader(msg)
+
+        elif msg.type == Msg_Type.ClientRequest:
+            self.process_client_request(msg)
+
+        elif msg.type == Msg_Type.AppendEntries:
             self.process_heartbeat(msg)
+
         elif msg.type == Msg_Type.AppendEntriesResponse:
             self.process_heartbeat_response(msg)
 
         elif msg.type == Msg_Type.RequestVote:
             self.process_vote_request(msg)
+
         elif msg.type == Msg_Type.RequestVoteResponse:
             self.process_vote_response(msg)
 

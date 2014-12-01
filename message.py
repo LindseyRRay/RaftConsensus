@@ -6,6 +6,10 @@ class Msg_Type(Enum):
     AppendEntriesResponse = 2
     RequestVote = 3
     RequestVoteResponse = 4
+    ClientRequest = 5
+    ClientResponse = 6
+    FindLeader = 7
+    FindLeaderResponse = 8
 
 class Message:
 	
@@ -84,6 +88,32 @@ class RequestVoteResponse(Message):
 		#if have not voted for anyone, and candidates log is at least asup to date
 		#then grant vote
 		self.vote_granted = vote_granted
+
+class ClientRequest:
+
+	def __init__(self, command):
+		self.command = command
+		self.type = Msg_Type.ClientRequest
+
+class FindLeader:
+
+	def __init__(self, recipient):
+		self.recipient = recipient
+		self.type = Msg_Type.FindLeader
+
+class FindLeaderResponse:
+
+	def __init__(self, data, sender):
+		self.data = data
+		self.type = Msg_Type.FindLeaderResponse
+
+
+class ClientRequestResponse:
+
+	def __init__(self, sender, data):
+		self.senderID = sender
+		self.commitindex = data
+		self.type = Msg_Type.ClientRequestResponse
 			
 
 

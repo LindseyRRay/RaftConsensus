@@ -87,7 +87,7 @@ class Raft:
 		for serv in self.server_list:
 			serv.start()
 		
-		while self.Run and count < 100000:
+		while self.Run:
 			with self.rlock:
 				if len(self.message_queue)>0:
 					print("count %s"%count)

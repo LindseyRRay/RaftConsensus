@@ -29,7 +29,7 @@ class Log:
 	@property
 	#index of last log entry
 	def lastLogIndex(self):
-	    return len(self.log)
+	    return len(self.log)-1
 	
 
 	    

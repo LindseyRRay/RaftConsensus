@@ -59,7 +59,10 @@ class Raft:
 			if msg.type ==  Msg_Type.FindLeader:
 				print("FINDING LEADER")
 
-			self.server_dict[server_id].queue_messages.append(msg)
+			if msg.type == Msg_Type.FindLeaderResponse or msg.type == Msg_Type.ClientRequestResponse:
+				self.client.message_queue.append(msg)
+			else:
+				self.server_dict[server_id].queue_messages.append(msg)
 
 
 	def main_loop(self):
@@ -94,7 +97,7 @@ class Raft:
 			serv.start()
 		self.client.start()
 		
-		while self.Run and count < 1000000:
+		while self.Run and count < 1000000000:
 			with self.rlock:
 				if len(self.message_queue)>0:
 					print("count %s"%count)

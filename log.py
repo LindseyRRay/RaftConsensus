@@ -21,14 +21,16 @@ class Log:
 		self.CommitIndex = 0
 		self.prevLogIndex = 0
 
+	#index of last log entry preceeding new ones
+	#this must be leader manipulated
+	def increment_prevLogIndex(self):
+		self.prevLogIndex +=1
+
 	@property
 	#index of last log entry
 	def lastLogIndex(self):
 	    return len(self.log)
-
-	#index of last log entry preceeding new ones
-	def incrementprevLogIndex(self):
-		self.prevLogIndex +=1	
+	
 
 	    
 	

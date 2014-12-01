@@ -30,6 +30,7 @@ class Client(threading.Thread):
 
     def find_leader(self):
         #send message to each server in list
+        logging.debug("Finding Leader")
         with self.rlock:
             for server in self.raft_instance.server_nums:
                 self.raft_instance.server_dict[server].queue_messages.append(FindLeader(server))
@@ -37,6 +38,7 @@ class Client(threading.Thread):
     def process_request_response(self, msg):
         #update commit index when leader communicates command has been committed to state machine
         #if receive a failing request response, initiate new find leader
+        logging.debug("Processing Re Response ")
         if not msg.data:
             self.find_leader()
         else:
@@ -46,6 +48,7 @@ class Client(threading.Thread):
 
     def process_leader_response(self, msg):
         if msg.data != None:
+            logging.debug("Found leader %s"%self.currentLeader)
             self.currentLeader = msg.sender
             self.leaderIndex += 1
         else:
@@ -79,12 +82,10 @@ class Client(threading.Thread):
         command = randint(-100,100)
         with self.rlock:
             try:
-                print(self.commandTimeOut)
                 if current > self.lastCommand + self.commandTimeOut:
                     print("Sending command")
                     self.send_command(command)
-                else:
-                    time.sleep(0)
+                time.sleep(0)
             except:
                 #first time
                 self.send_command(command)

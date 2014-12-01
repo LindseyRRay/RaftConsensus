@@ -91,13 +91,15 @@ class RequestVoteResponse(Message):
 
 class ClientRequest:
 
-	def __init__(self, command):
+	def __init__(self, recipient, command):
+		self.recipients = recipient
 		self.command = command
 		self.type = Msg_Type.ClientRequest
 
 class ClientRequestResponse:
 
 	def __init__(self, sender, data):
+		self.recipients = "client"
 		self.senderID = sender
 		self.commitindex = data
 		self.type = Msg_Type.ClientRequestResponse
@@ -105,12 +107,13 @@ class ClientRequestResponse:
 class FindLeader:
 
 	def __init__(self, recipient):
-		self.recipient = recipient
+		self.recipients = recipient
 		self.type = Msg_Type.FindLeader
 
 class FindLeaderResponse:
 
 	def __init__(self, data):
+		self.recipients = "client"
 		self.data = data
 		self.type = Msg_Type.FindLeaderResponse
 

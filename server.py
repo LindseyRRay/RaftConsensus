@@ -248,7 +248,7 @@ class Server(threading.Thread):
 
     def send_message(self, recip, msg_type, data=[]):
         #Create a new message and add arguments
-        #logging.debug("Sending message %s to %s" %(str(self.ID), str(recip)))
+        logging.debug("Sending message %s to %s" %(str(self.ID), str(recip)))
         #Add message to universal queue
         #pass server IDS to the current message
         if msg_type == Msg_Type.AppendEntries:
@@ -278,11 +278,12 @@ class Server(threading.Thread):
     def process_client_request(self, msg):
         #if you are leader you need to correctly process client request
         #if you are the leader, add command to your log
+        logging.debug("Processing Client Req %s" %(str(self.ID)))
         if self.state == State.leader:
             with self.rlock:
-                newEntry = LogEntry(self.current_term, msg.data)
+                newEntry = LogEntry(self.current_term, msg.command)
                 self.log.log.append(newEntry)
-                self.log.increment_prevLogIndex()
+                self.log.increment_prevLogIndex
                 self.send_heartbeat(newEntry)
         else:
             #client doesn't know who leader is anymore, tell client to initiate search
@@ -290,6 +291,7 @@ class Server(threading.Thread):
       
     
     def process_find_leader(self, msg):
+        logging.debug("Processing FInd Leader %s" %(str(self.ID)))
         self.send_message("client", Msg_Type.FindLeaderResponse, self.currentLeader)
       
 

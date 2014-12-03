@@ -13,31 +13,21 @@ class Msg_Type(Enum):
 
 class Message:
 	
-	def __init__(self, sender, recipients):
+	def __init__(self, sender, recipient, term=sender.current_term):
 		self.senderID = sender.ID
-		self.SERVER_IDS = sender.SERVER_IDS
-		self.recipients = self.parse_recipients(recipients)
-		self.term = sender.current_term
-		
-
-	def parse_recipients(self, recipients):
-		#if recipients are all servers
-		if recipients[0] == 'a':
-			list_recipients = [str(server) for server in self.SERVER_IDS if server != self.senderID]
-			return list_recipients
-		else:
-			return recipients
-		
+		self.recipient = recipient
+		self.term = term
+	
 				
 class AppendEntries(Message):
 
-	def __init__(self, sender, recipients, data):
-		Message.__init__(self, sender, recipients)
+	def __init__(self, sender, recipient, data):
+		Message.__init__(self, sender, recipient)
 		#sender will always be the leader
 		self.leaderID = sender.ID
-		self.prevLogIndex = sender.log.prevLogIndex
+		self.prevLogIndex = sender.prevLogIndex
 		try:
-			self.prevLogTerm = sender.log.log[self.prevLogIndex].term 
+			self.prevLogTerm = sender.prevLogTerm
 		except:
 			self.prevLogTerm = 0
 		self.entries = data
@@ -53,35 +43,21 @@ class AppendEntriesResponse(Message):
 		self.success_indices = list()
 		self.type = Msg_Type.AppendEntriesResponse
 
-	#def consistency_check(self):
-		#reply false if term < current Term
-	#	if self.current_term > self.term:
-			#return False
-		#reply false if log deoesn't contain an entry at prev log index who matches
-	#	if sender.log.log[AppendEntries.prevLogIndex].term != AppendEntries.prevLogTerm:
-		#	return False
-		#if existing entry conflicts with new one (same index, but diff terms, 
-			#delete existing entry and all that follow)
-		#append entrues not in log
-		#if leader commit > commit index, then commitindex = min(leadercommit, index of last new entry)
-
 class RequestVote(Message):
 
-	def __init__(self, sender, recipients):
-		Message.__init__(self, sender, recipients)
+	def __init__(self, sender, recipient, lastLogTerm, lastLogIndex):
+		Message.__init__(self, sender, recipient)
 		#index of last log entry
-		self.lastLogIndex = sender.log.lastLogIndex
 		#term of candidate's last log entry
+		self.lastLogTerm = lastLogTerm 
+		self.lastLogIndex = lastLogIndex
 		self.type = Msg_Type.RequestVote
-		try:
-			self.lastLogTerm = sender.log.log[self.lastLogIndex].term
-		except:
-			self.lastLogTerm = 0
+
 
 class RequestVoteResponse(Message):
 
-	def __init__(self, sender, recipients, vote_granted):
-		Message.__init__(self, sender, recipients)
+	def __init__(self, sender, recipient, vote_granted):
+		Message.__init__(self, sender, recipient)
 		self.term = sender.current_term
 		self.type = Msg_Type.RequestVoteResponse
 		#reply false if msg term < current term
@@ -92,28 +68,28 @@ class RequestVoteResponse(Message):
 class ClientRequest:
 
 	def __init__(self, recipient, command):
-		self.recipients = recipient
+		self.recipient = recipient
 		self.command = command
 		self.type = Msg_Type.ClientRequest
 
 class ClientRequestResponse:
 
 	def __init__(self, sender, data):
-		self.recipients = "client"
-		self.senderID = sender
-		self.commitindex = data
+		self.senderID = sender.ID
+		self.commitIndex = data
 		self.type = Msg_Type.ClientRequestResponse
 
 class FindLeader:
 
 	def __init__(self, recipient):
-		self.recipients = recipient
+		self.recipient = recipient
 		self.type = Msg_Type.FindLeader
 
 class FindLeaderResponse:
 
-	def __init__(self, data):
-		self.recipients = "client"
+	def __init__(self, sender, data):
+		self.senderID = sender.ID
+		self.term = sender.current_term
 		self.data = data
 		self.type = Msg_Type.FindLeaderResponse
 

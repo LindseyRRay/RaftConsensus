@@ -62,9 +62,11 @@ class Server(threading.Thread):
         self.currentLeader = None
 
         #log attributes
-        self.log = Log()
+        self.log = Log(self.ID)
 
         #Leader attributes
+        self.prevLogTerm = None
+        self.prevLogIndex = 0
 
 
 #generate election timeout interval
@@ -118,19 +120,27 @@ class Server(threading.Thread):
         self.send_requestvote()
         #self.state_manager.next_step()
 
+
+    def election_restriction(self, msg):
+        #a candidate cannot win an election unless log contains ALL committed entries
+        #DENY vote if own log is more uptodate than servers
+
+
+
     def send_requestvote(self):
         #logging.debug("Asking for votes %s" %self.ID)
         #send message to all servers asking for votes
-        self.send_message(recip = 'all_servers', msg_type = Msg_Type.RequestVote)
+        for serv in self.peers:
+            self.send_message(recip = serv, msg_type = Msg_Type.RequestVote)
 
 #sending vote function
     def send_vote(self):  
         #logging.debug("sending vote: %s for: %s" %(str(self.ID), str(self.voted_for))) 
         with self.rlock:
-            self.send_message(recip = [self.voted_for], msg_type = Msg_Type.RequestVoteResponse, data = True) 
+            self.send_message(recip = self.voted_for, msg_type = Msg_Type.RequestVoteResponse, data = True) 
     
     def send_heartbeat_response(self, success):
-        self.send_message(recip =[self.currentLeader], msg_type = Msg_Type.AppendEntriesResponse, data = success)
+        self.send_message(recip=self.currentLeader, msg_type = Msg_Type.AppendEntriesResponse, data = success)
 #process a heartbeat message
 
     def process_heartbeat(self, msg):
@@ -171,13 +181,14 @@ class Server(threading.Thread):
                 #pass
            # else:
               #  self.send_heartbeat()
+
     #append any new entries not in the log
     def append_entries(self, msg):
         for index, entry in msg.entries:
             if index > len(self.log.log)-1:
                 self.log.log.append(entry)
         #update prevLogIndex
-        self.log.prevLogIndex = len(self.log.log)-1
+        self.prevLogIndex = len(self.log.log)-1
 
     def compare_logs(self, msg):
         #if an existing entry conflicts with a new one (same index but dif terms),
@@ -189,10 +200,11 @@ class Server(threading.Thread):
                 self.log.log.remove(self.log.log[index])
 
     def check_commit_indices(self):
-        for index, log in enumerate(self.l.logog.log):
+        for index, log in enumerate(self.log.log):
             if log.success_count > len(self.peers)/2:
                 self.log.commitIndex = index
-        self.send_heartbeat()   
+        self.send_heartbeat() 
+
        
     def process_heartbeat_response(self, msg):
         if self.state == State.leader and msg.term ==self.current_term:
@@ -212,10 +224,15 @@ class Server(threading.Thread):
 
     def process_vote_request(self, msg):
         #print("processing vote request %s" %self.ID)
+        #only grant votes to servers with matching logs
         if self.state == State.candidate and self.voted_for == None and msg.term >= self.current_term:
-            self.voted_for = str(msg.senderID)
-            self.current_term = msg.term
-            self.send_vote()
+            if self.log.compare_up_to_date(msg)[0]:
+                self.voted_for = str(msg.senderID)
+                self.current_term = msg.term
+                self.send_vote()
+            else:
+                raise RuntimeError("Not up to date log")
+
 
 
     def process_vote_response(self, msg): 
@@ -230,6 +247,7 @@ class Server(threading.Thread):
             self.state = State.leader
             self.current_term += 1
             self.become_leader()
+
 #change state to leader
 #send out heartbeat, clear your queue list
     def become_leader(self):
@@ -250,7 +268,8 @@ class Server(threading.Thread):
     def send_heartbeat(self, data =[]):
         #logging.debug("Sending heartbeat %s" %self.ID)
         #send heartbeat with new commit index, info associated from client
-        self.send_message(recip = 'all_servers', msg_type=Msg_Type.AppendEntries, data = data)
+        for serv in self.peers:
+            self.send_message(recip = serv , msg_type=Msg_Type.AppendEntries, data = data)
 
 
     def send_message(self, recip, msg_type, data=[]):
@@ -259,17 +278,17 @@ class Server(threading.Thread):
         #Add message to universal queue
         #pass server IDS to the current message
         if msg_type == Msg_Type.AppendEntries:
-            msg = AppendEntries(self, recipients = recip, data = data)
+            msg = AppendEntries(self, recipient = recip, data = data)
         elif msg_type == Msg_Type.AppendEntriesResponse:
             msg = AppendEntriesResponse(self, self.currentLeader, data = data)
         elif msg_type == Msg_Type.RequestVote:
-            msg = RequestVote(self, recipients = recip)
+            msg = RequestVote(self, recipient = recip)
         elif msg_type == Msg_Type.RequestVoteResponse:
             msg = RequestVoteResponse(self, recip, vote_granted = data)
         elif msg_type == Msg_Type.FindLeaderResponse:
-            msg = FindLeaderResponse(data)
+            msg = FindLeaderResponse(self, data)
         elif msg_type == Msg_Type.ClientRequestResponse:
-            msg = ClientRequestResponse(self.ID, data)
+            msg = ClientRequestResponse(self, data)
 
         else:
             raise Exception("Unknown type of Message")
@@ -298,17 +317,22 @@ class Server(threading.Thread):
       
     
     def process_find_leader(self, msg):
-        logging.debug("Processing FInd Leader %s" %(str(self.ID)))
-        self.send_message("client", Msg_Type.FindLeaderResponse, self.currentLeader)
+        logging.debug("Processing Find Leader %s" %(str(self.ID)))
+        self.send_message("client", Msg_Type.FindLeaderResponse, (self.state == State.leader))
       
+    def get_messages(self):
+        #get messages from the message queue
+        while self.message_queue:
+            with self.rlock:
+                yield self.message_queue.pop()
 
     def check_messages(self):
         #logging.debug("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))
         logging.debug("State %s" %self.state)
         if len(self.queue_messages) == 0 and self.state == State.leader:
             self.send_heartbeat()
-        while len(self.queue_messages) > 0 :
-            self.process_message(self.queue_messages.pop())
+        for msg in self.get_messages():
+            self.process_message(msg)
 
        # while not self.queue_messages.empty():
          #   self.process_message(self.queue_messages.get())

@@ -6,8 +6,15 @@
 #implement match index checking for leaders
 import threading
 import time
+import logging
 from random import randint
 from message import ClientRequest, FindLeader, FindLeaderResponse, ClientRequestResponse
+
+#import logging and debugging 
+logging.basicConfig(level=logging.DEBUG,
+                    format='[%(levelname)s] (%(threadName)-10s) %(message)s',
+                    )
+
 
 class Client(threading.Thread):
     
@@ -19,12 +26,16 @@ class Client(threading.Thread):
         self.message_queue = list()
         self.rlock = threading.RLock()
         self.currentLeader = None
-        self.leaderTracking= list()
+        self.leaderTracking = list()
+        self.leaderTries = 0
         self.lastCommandTime = None
         self.lastLeaderTime = None
-        self.commandTimeOut = self.generate_election_time()
+        self.commandTimeOut = self.generate_command_time()
         self.daemon = True
     
+    def generate_command_time(self):
+        #return randint(150,300)/1000
+        return randint(300,600)/10
 
     def find_leader(self):
         #send message to each server in list
@@ -40,7 +51,7 @@ class Client(threading.Thread):
         logging.debug("Processing Req Response ")
         if not msg.data or self.currentLeader != msg.senderID or msg.term != self.leaderTracking[-1][1]:
             time.sleep(2)
-            self.find_leader()
+            #self.find_leader()
         else:
             with self.rlock:
                 self.commitIndex = max(self.commitIndex, msg.commitIndex)
@@ -48,7 +59,7 @@ class Client(threading.Thread):
 
     def process_leader_response(self, msg):
         current = time.time()
-        if msg.data != None:
+        if msg.data == True:
             logging.debug("Found leader %s"%self.currentLeader)
             self.currentLeader = msg.sender
             self.leaderTracking.append((msg.sender, msg.term))
@@ -60,9 +71,10 @@ class Client(threading.Thread):
             #if no declared leader, sleep thread and wait for more messages
             self.leaderTries +=1 
             if self.leaderTries == self.raft_instance.number_servers or self.lastLeaderTime + 60 > current:
-                self.find_leader()
+                #self.find_leader()
+                pass
             #if haven't received replies from all servers, call election
-            time.sleep(5)
+            time.sleep(0)
 
 
     def get_messages(self):
@@ -94,7 +106,7 @@ class Client(threading.Thread):
         #if get back as response that with False
         current = time.time()
         command = randint(-100,100)
-        if self.currentLeader:
+        if self.currentLeader != None:
             with self.rlock:
                 try:
                     if current > self.lastCommandTime + self.commandTimeOut:
@@ -104,7 +116,9 @@ class Client(threading.Thread):
                 except:
                     #first time
                     self.send_command(command)
+        time.sleep(1)
         self.find_leader()
+        time.sleep(0)
 
 
     def run(self):

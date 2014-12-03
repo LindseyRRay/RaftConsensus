@@ -121,11 +121,6 @@ class Server(threading.Thread):
         #self.state_manager.next_step()
 
 
-    def election_restriction(self, msg):
-        #a candidate cannot win an election unless log contains ALL committed entries
-        #DENY vote if own log is more uptodate than servers
-
-
 
     def send_requestvote(self):
         #logging.debug("Asking for votes %s" %self.ID)
@@ -226,12 +221,15 @@ class Server(threading.Thread):
         #print("processing vote request %s" %self.ID)
         #only grant votes to servers with matching logs
         if self.state == State.candidate and self.voted_for == None and msg.term >= self.current_term:
-            if self.log.compare_up_to_date(msg)[0]:
-                self.voted_for = str(msg.senderID)
-                self.current_term = msg.term
-                self.send_vote()
-            else:
-                raise RuntimeError("Not up to date log")
+            self.voted_for = str(msg.senderID)
+            self.current_term = msg.term
+            self.send_vote()
+            # if self.log.compare_up_to_date(msg)[0]:
+            #     self.voted_for = str(msg.senderID)
+            #     self.current_term = msg.term
+            #     self.send_vote()
+            # else:
+            #     raise RuntimeError("Not up to date log")
 
 
 
@@ -251,8 +249,10 @@ class Server(threading.Thread):
 #change state to leader
 #send out heartbeat, clear your queue list
     def become_leader(self):
-        #logging.debug("becoming leader %s" %self.ID)
+        logging.debug("becoming leader %s" %self.ID)
         self.send_heartbeat()
+        logging.debug("Leader talking to client %s" %self.ID)
+        self.send_message("client", Msg_Type.FindLeaderResponse, True)
         self.currentLeader = self.ID
         #self.queue_messages = Queue()
         self.queue_messages = list()
@@ -260,6 +260,7 @@ class Server(threading.Thread):
         # Reinitialize last indices
         self.next_index = dict() 
         self.match_index = dict()
+        time.sleep(0)
 
     def reinitialize_match_indices(self):
         self.next_index = {p: self.log.lastLogIndex+1 for p in peers}
@@ -282,7 +283,7 @@ class Server(threading.Thread):
         elif msg_type == Msg_Type.AppendEntriesResponse:
             msg = AppendEntriesResponse(self, self.currentLeader, data = data)
         elif msg_type == Msg_Type.RequestVote:
-            msg = RequestVote(self, recipient = recip)
+            msg = RequestVote(self, recipient = recip, lastLogTerm = self.log.lastLogTerm, lastLogIndex = self.log.lastLogIndex)
         elif msg_type == Msg_Type.RequestVoteResponse:
             msg = RequestVoteResponse(self, recip, vote_granted = data)
         elif msg_type == Msg_Type.FindLeaderResponse:
@@ -322,9 +323,9 @@ class Server(threading.Thread):
       
     def get_messages(self):
         #get messages from the message queue
-        while self.message_queue:
+        while self.queue_messages:
             with self.rlock:
-                yield self.message_queue.pop()
+                yield self.queue_messages.pop()
 
     def check_messages(self):
         #logging.debug("Checking Messages %s an len is %s" %(self.ID, len(self.queue_messages)))

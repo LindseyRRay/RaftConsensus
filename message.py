@@ -11,12 +11,14 @@ class Msg_Type(Enum):
     FindLeader = 7
     FindLeaderResponse = 8
 
-class Message:
-	
-	def __init__(self, sender, recipient, term=sender.current_term):
+class Message:	
+	def __init__(self, sender, recipient, term=[]):
 		self.senderID = sender.ID
 		self.recipient = recipient
-		self.term = term
+		if term:
+			self.term = term
+		else:
+			self.term = sender.current_term
 	
 				
 class AppendEntries(Message):
@@ -68,6 +70,7 @@ class RequestVoteResponse(Message):
 class ClientRequest:
 
 	def __init__(self, recipient, command):
+		self.senderID = "cl"
 		self.recipient = recipient
 		self.command = command
 		self.type = Msg_Type.ClientRequest
@@ -78,10 +81,12 @@ class ClientRequestResponse:
 		self.senderID = sender.ID
 		self.commitIndex = data
 		self.type = Msg_Type.ClientRequestResponse
+		self.recipient = "client"
 
 class FindLeader:
 
 	def __init__(self, recipient):
+		self.senderID = "client"
 		self.recipient = recipient
 		self.type = Msg_Type.FindLeader
 
@@ -92,6 +97,7 @@ class FindLeaderResponse:
 		self.term = sender.current_term
 		self.data = data
 		self.type = Msg_Type.FindLeaderResponse
+		self.recipient = "client"
 
 
 

@@ -33,7 +33,7 @@ class Log:
 		#is more up to date
 		#if logs end with the same term, then the longest log is most up to date
 		#returns tuple of boolean if logs are equal and them most up to date on
-		if self.log[-1].term == msg.lastLogTerm and self.log.lastLogIndex == msg.lastLogIndex
+		if self.log[-1].term == msg.lastLogTerm and self.log.lastLogIndex == msg.lastLogIndex:
 			return (True, None)
 		else:
 			if self.log.lastLogIndex > msg.lastLogIndex or self.log[-1].term > msg.lastLogTerm:

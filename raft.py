@@ -53,16 +53,16 @@ class Raft:
 	def distribute_message(self, msg, server_id):
 		with self.rlock:
 			#server.queue_messages.put(msg)
-			logging.debug("Message Type %s"%type(msg).__name__)
-			logging.debug("Message from %s"%msg.senderID)
-			logging.debug("Message t0 %s" %msg.recipients)
-			if msg.type ==  Msg_Type.FindLeader:
-				print("FINDING LEADER")
+			if msg.type !=  Msg_Type.FindLeader or msg.type != Msg_Type.ClientRequest:
+				logging.debug("Message Type %s"%type(msg).__name__)
+				logging.debug("Message from %s"%msg.senderID)
+				logging.debug("Message t0 %s" %msg.recipient)
 
 			if msg.type == Msg_Type.FindLeaderResponse or msg.type == Msg_Type.ClientRequestResponse:
+				print("Client Message")
 				self.client.message_queue.append(msg)
 			else:
-				self.server_dict[server_id].queue_messages.append(msg)
+				self.server_dict[msg.recipient].queue_messages.append(msg)
 
 
 	def main_loop(self):
@@ -79,7 +79,7 @@ class Raft:
 				msg = self.message_queue.pop(0)
 			
 				logging.debug("Main distributing messages")
-				[self.distribute_message(msg, serv) for serv in msg.recipients]
+				[self.distribute_message(msg, serv) for serv in msg.recipient]
 		
 		
 				
@@ -103,8 +103,7 @@ class Raft:
 					print("count %s"%count)
 					print(len(self.message_queue))
 				for msg in self.message_queue:
-					for serv in msg.recipients:
-						self.distribute_message(msg, serv)
+					self.distribute_message(msg, serv)
 				del self.message_queue[:]
 			with self.rlock:
 				count +=1

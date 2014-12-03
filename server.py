@@ -8,6 +8,13 @@ import pdb
 import logging
 
 
+#ADD CONSISTENCY CHECK METHOD
+#ADD METHOD TO KEEP TRACK OF NEXT INDEX AND MATCH INDEX
+#add method to initialize machtindex to 0
+#SEPARATE METHODS FROM BECOMMING LEADER
+#ADD METHOD TO SEND DIFFERENT HEARTBEATS TO DIFF SERVERS-> 
+#CHANGE TO ENSURE THAT MESSAGES ONLY TO TO 1 server
+
 #import logging and debugging 
 logging.basicConfig(level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
